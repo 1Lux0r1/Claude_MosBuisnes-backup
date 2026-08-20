@@ -14,8 +14,8 @@ import SettingsService from "./microservices/SettingsService";
 import { HomeSkeleton, Reveal, Sheet, ToastProvider, useToast } from "./ui";
 import { Icon } from "./icons";
 import {
-  NEWS, PARTNER_PAGES, QUICK_ACTIONS, SERVICE_SECTIONS,
-  type NewsItem, type Partner, type QuickAction, type SearchHit, type ServiceSection,
+  NEWS, NEWS_SECTION_META, PARTNER_PAGES, QUICK_ACTIONS, SERVICE_SECTIONS,
+  type NewsItem, type NewsSection, type Partner, type QuickAction, type SearchHit, type ServiceSection,
 } from "./data";
 
 type SheetState =
@@ -119,7 +119,10 @@ export default function App() {
         backgroundSize: "auto, auto, 22px 22px",
       }}
     >
-      <div className="mx-auto flex h-full w-full max-w-[400px] flex-col bg-white shadow-[0_0_90px_-24px_rgba(14,18,32,0.35)] md:my-5 md:h-[calc(100%-40px)] md:max-w-[392px] md:rounded-[46px] md:border-[9px] md:border-ink">
+      <div
+        id="app-shell"
+        className="relative mx-auto flex h-full w-full max-w-[400px] flex-col overflow-hidden bg-card text-ink shadow-[0_0_90px_-24px_rgba(14,18,32,0.35)] md:my-5 md:h-[calc(100%-40px)] md:max-w-[392px] md:rounded-[46px] md:border-[9px] md:border-ink-solid"
+      >
         <ToastProvider>
           <Shell
             tab={tab}
@@ -333,36 +336,91 @@ function ActionSheetView({
   onNavigate: (s: SheetState) => void;
 }) {
   const toast = useToast();
+  const [newsFilter, setNewsFilter] = useState<NewsSection | "all">("all");
 
   if (!sheet) return null;
 
   if (sheet.kind === "newslist") {
+    const filtered = (newsFilter === "all" ? NEWS : NEWS.filter((n) => n.section === newsFilter))
+      .slice()
+      .sort((a, b) => b.relevance - a.relevance);
+
     return (
-      <Sheet open onClose={onClose} title="Все новости">
-        <p className="text-[12px] font-semibold text-sub">Лента МосБизнес · обновлено сегодня</p>
-        <div className="mt-3 space-y-2">
-          {NEWS.map((n) => (
+      <div className="animate-fade-in absolute inset-0 z-[62] flex flex-col bg-paper">
+        <div className="border-b border-line/70 bg-card/90 backdrop-blur-md">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <button onClick={onClose} className="press grid h-9 w-9 shrink-0 place-items-center rounded-full bg-paper text-ink2" aria-label="Назад">
+              <Icon name="chevron-left" className="h-5 w-5" strokeWidth={2.1} />
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-[15px] font-semibold tracking-tight">Все новости</p>
+              <p className="text-[11px] font-semibold text-sub">{filtered.length} новостей · по релевантности</p>
+            </div>
+          </div>
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-3">
             <button
-              key={n.id}
-              onClick={() => onNavigate({ kind: "news", data: n })}
-              className="press flex w-full items-start gap-3 rounded-2xl border border-line/70 bg-white p-3 text-left"
+              onClick={() => setNewsFilter("all")}
+              className={`press shrink-0 rounded-full px-3 py-1.5 text-[12px] font-extrabold transition-colors ${
+                newsFilter === "all" ? "bg-ink text-on-ink" : "bg-paper text-sub"
+              }`}
             >
-              <span
-                className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full ${
-                  n.important ? "bg-danger text-white" : "bg-accent-soft text-accent"
+              Все
+            </button>
+            {(Object.keys(NEWS_SECTION_META) as NewsSection[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setNewsFilter(s)}
+                className={`press inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-extrabold transition-colors ${
+                  newsFilter === s ? "bg-ink text-on-ink" : "bg-paper text-sub"
                 }`}
               >
-                <Icon name={n.important ? "excl" : "news"} className="h-3.5 w-3.5" strokeWidth={2.2} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-extrabold leading-snug tracking-tight">{n.title}</span>
-                <span className="mt-0.5 block text-[11px] font-bold text-faint">{n.date}</span>
-              </span>
-              <Icon name="chevron-right" className="mt-1 h-4 w-4 shrink-0 text-faint" strokeWidth={2.2} />
-            </button>
-          ))}
+                <Icon name={NEWS_SECTION_META[s].icon} className="h-3.5 w-3.5" strokeWidth={2.2} />
+                {NEWS_SECTION_META[s].label}
+              </button>
+            ))}
+          </div>
         </div>
-      </Sheet>
+
+        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          {filtered.length === 0 ? (
+            <p className="mt-10 text-center text-[12.5px] font-semibold text-sub">В этом направлении пока нет новостей</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {filtered.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => onNavigate({ kind: "news", data: n })}
+                  className="press group relative flex aspect-square flex-col justify-between overflow-hidden rounded-2xl p-3 text-left shadow-card transition-shadow hover:shadow-float"
+                  style={{ background: `linear-gradient(135deg, ${n.artFrom}, ${n.artTo})` }}
+                >
+                  <Icon
+                    name={n.artIcon}
+                    className="pointer-events-none absolute -bottom-4 -right-4 h-20 w-20 text-white opacity-[0.2] transition-transform duration-300 group-hover:scale-110"
+                    strokeWidth={1.3}
+                  />
+                  <span className="relative flex items-start justify-between">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[9px] font-extrabold text-ink-solid backdrop-blur-sm">
+                      <Icon name={NEWS_SECTION_META[n.section].icon} className="h-2.5 w-2.5" strokeWidth={2.4} />
+                      {NEWS_SECTION_META[n.section].label}
+                    </span>
+                    {n.important && (
+                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white text-danger" title="Важная новость">
+                        <Icon name="excl" className="h-3 w-3" strokeWidth={2.8} />
+                      </span>
+                    )}
+                  </span>
+                  <span className="relative">
+                    <span className="block line-clamp-3 text-[12px] font-extrabold leading-snug tracking-tight text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">
+                      {n.title}
+                    </span>
+                    <span className="mt-1 block text-[9.5px] font-bold text-white/80">{n.date}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -370,15 +428,25 @@ function ActionSheetView({
     const n = sheet.data;
     return (
       <Sheet open onClose={onClose} title="Новость">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-extrabold ${
-            n.important ? "bg-danger-soft text-danger" : "bg-paper text-sub"
-          }`}
+        <div
+          className="relative -mx-5 mb-3.5 flex h-24 items-end overflow-hidden px-5 pb-3"
+          style={{ background: `linear-gradient(135deg, ${n.artFrom}, ${n.artTo})` }}
         >
-          {n.important && <Icon name="excl" className="h-3 w-3" strokeWidth={2.4} />}
-          {n.category === "mandatory" ? "Обязательная" : n.category === "personal" ? "Персональная" : "Образовательная"}
-        </span>
-        <h4 className="mt-2.5 text-[16px] font-extrabold leading-snug tracking-tight">{n.title}</h4>
+          <Icon
+            name={n.artIcon}
+            className="pointer-events-none absolute -bottom-5 -right-5 h-28 w-28 text-white opacity-[0.2]"
+            strokeWidth={1.3}
+          />
+          <span
+            className={`relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-extrabold backdrop-blur-sm ${
+              n.important ? "bg-white text-danger" : "bg-white/90 text-ink-solid"
+            }`}
+          >
+            {n.important && <Icon name="excl" className="h-3 w-3" strokeWidth={2.4} />}
+            {NEWS_SECTION_META[n.section].label}
+          </span>
+        </div>
+        <h4 className="text-[16px] font-extrabold leading-snug tracking-tight">{n.title}</h4>
         <p className="mt-1 text-[11px] font-bold text-faint">{n.date} · Центр предпринимательства Москвы</p>
         <p className="mt-3 text-[13.5px] font-medium leading-relaxed text-ink2">{n.text}</p>
         <div className="mt-4 flex gap-2">
@@ -387,7 +455,7 @@ function ActionSheetView({
               toast("Новость сохранена в закладки", "star");
               onClose();
             }}
-            className="press flex-1 rounded-full bg-ink py-2.5 text-[12.5px] font-extrabold text-white"
+            className="press flex-1 rounded-full bg-ink py-2.5 text-[12.5px] font-extrabold text-on-ink"
           >
             В закладки
           </button>
@@ -403,25 +471,60 @@ function ActionSheetView({
     const p = sheet.data;
     return (
       <Sheet open onClose={onClose} title="Предложение партнёра">
-        <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 place-items-center rounded-2xl text-[13px] font-extrabold" style={{ background: p.logoBg, color: p.logoFg }}>
-            {p.logo}
-          </span>
-          <div>
-            <p className="text-[15px] font-extrabold tracking-tight">{p.name}</p>
-            {p.city && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-ink px-2 py-[3px] text-[8.5px] font-extrabold uppercase tracking-wide text-white">
-                <Icon name="star" className="h-2.5 w-2.5 fill-[#ffc531] text-[#ffc531]" strokeWidth={1} />
-                Партнёр Москвы
-              </span>
-            )}
+        <div
+          className="relative -mx-5 mb-3.5 flex h-28 items-end overflow-hidden px-5 pb-3"
+          style={{ background: `linear-gradient(135deg, ${p.artFrom}, ${p.artTo})` }}
+        >
+          <Icon
+            name={p.artIcon}
+            className="pointer-events-none absolute -bottom-6 -right-6 h-32 w-32 text-white opacity-[0.18]"
+            strokeWidth={1.3}
+          />
+          <div className="relative flex items-center gap-3">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/92 text-[13px] font-extrabold backdrop-blur-sm" style={{ color: p.logoFg }}>
+              {p.logo}
+            </span>
+            <div>
+              <p className="text-[16px] font-extrabold tracking-tight text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)]">{p.name}</p>
+              {p.city && (
+                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-black/35 px-2 py-[3px] text-[8.5px] font-extrabold uppercase tracking-wide text-white backdrop-blur-sm">
+                  <Icon name="star" className="h-2.5 w-2.5 fill-[#ffc531] text-[#ffc531]" strokeWidth={1} />
+                  Партнёр Москвы
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        <p className="mt-3 text-[13px] font-medium leading-relaxed text-sub">{p.desc}</p>
+
+        <p className="text-[13px] font-medium leading-relaxed text-sub">{p.desc}</p>
+
         <div className="mt-3 rounded-2xl bg-ok-soft p-3.5">
-          <p className="text-[11px] font-extrabold uppercase tracking-wide text-ok">Специальное условие</p>
-          <p className="mt-0.5 text-[15px] font-extrabold text-ok">{p.offer}</p>
+          <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-ok">
+            <Icon name="trend-up" className="h-3.5 w-3.5" strokeWidth={2.4} />
+            Выгода
+          </p>
+          <p className="mt-1 text-[14px] font-extrabold leading-snug text-ok">{p.benefit}</p>
         </div>
+
+        <div className="mt-2.5 rounded-2xl bg-accent-soft p-3.5">
+          <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-accent-deep">
+            <Icon name="spark" className="h-3.5 w-3.5" strokeWidth={2.4} />
+            Почему только здесь
+          </p>
+          <p className="mt-1 text-[12.5px] font-semibold leading-snug text-ink2">{p.unique}</p>
+        </div>
+
+        <ul className="mt-3 space-y-2">
+          {p.details.map((d, i) => (
+            <li key={i} className="flex items-start gap-2.5 rounded-xl bg-paper px-3 py-2.5">
+              <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-ok text-white">
+                <Icon name="check" className="h-2.5 w-2.5" strokeWidth={3} />
+              </span>
+              <span className="text-[12.5px] font-bold leading-snug">{d}</span>
+            </li>
+          ))}
+        </ul>
+
         <button
           onClick={() => {
             toast(`Заявка на подключение отправлена: ${p.name}`, "check");
@@ -443,7 +546,7 @@ function ActionSheetView({
       <ol className="mt-3 space-y-2.5">
         {a.steps.map((s, i) => (
           <li key={i} className="flex items-center gap-3 rounded-xl bg-paper px-3 py-2.5">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white text-[12px] font-extrabold text-accent-deep shadow-card">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-card text-[12px] font-extrabold text-accent-deep shadow-card">
               {i + 1}
             </span>
             <span className="text-[13px] font-bold">{s}</span>
